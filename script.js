@@ -132,7 +132,7 @@ function parseCommand(command) {
       }
       break;
     case "help":
-      updateConsole("Commands: ls, cd [dir], cat [file], tree, help", "message");
+      updateConsole("Commands: ls, cd [dir], cat [file], tree, help", "content");
       break;
     case "clear":
       consoleElement.innerHTML = "";
