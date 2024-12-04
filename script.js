@@ -19,8 +19,11 @@ let loadingAnimationInterval = null; // Store the interval for loading animation
 // Update console with new output
 function updateConsole(output, type) {
   const div = document.createElement("div");
-  div.textContent = output;
   div.classList.add(type);
+
+  div.innerHTML = output.replace(/\n/g, "<br>");
+  div.style.whiteSpace = "pre-wrap";
+
   consoleElement.appendChild(div);
   consoleElement.scrollTop = consoleElement.scrollHeight;
 }
@@ -41,6 +44,34 @@ function stopLoading() {
   clearInterval(loadingAnimationInterval);
   prompt.innerHTML = `${currentPathStr}$ `;
   commandInput.disabled = false;
+}
+
+// Function to generate the directory tree recursively
+function generateTree(dir, depth = 0, isLast = false) {
+  let tree = "";
+  const keys = Object.keys(dir);
+  const lastKeyIndex = keys.length - 1;
+
+  keys.forEach((key, index) => {
+    // Игнорируем ключи "id" и "content"
+    if (key === "id" || key === "content") {
+      return;
+    }
+
+    const isLastItem = index === lastKeyIndex;
+    const prefix = isLastItem ? "└── " : "├── ";
+    const connector = isLastItem ? "    " : "│   ";
+
+    // Добавляем текущий элемент (директорию или файл)
+    tree += "    ".repeat(depth) + prefix + key + "\n";
+
+    // Если это папка, рекурсивно добавляем содержимое
+    if (typeof dir[key] === "object") {
+      tree += generateTree(dir[key], depth + 1, isLastItem);
+    }
+  });
+
+  return tree;
 }
 
 // Parse user commands
@@ -71,9 +102,8 @@ function parseCommand(command) {
         updateConsole("Directory not found", "error");
       }
       break;
-
     case "cat":
-      if (args[0] && typeof currentDir[args[0]]["id"] && currentDir[args[0]]["content"] === "") {
+      if (args[0] && currentDir[args[0]] && typeof currentDir[args[0]]["id"] && currentDir[args[0]]["content"] === "") {
         startLoading();
         fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]]["id"]}`, {})
             .then(response => response.json())
@@ -93,32 +123,16 @@ function parseCommand(command) {
         updateConsole("File not found", "error");
       }
       break;
-    case "mkdir":
-      if (args[0]) {
-        if (!currentDir[args[0]]) {
-          currentDir[args[0]] = {}; // Create a new directory
-          updateConsole(`Directory '${args[0]}' created.`, "success");
-        } else {
-          updateConsole(`Directory '${args[0]}' already exists.`, "error");
-        }
+    case "tree":
+      if (typeof currentDir === 'object') {
+        const tree = generateTree(currentDir);
+        updateConsole(tree, "content");
       } else {
-        updateConsole("Please specify a directory name.", "error");
-      }
-      break;
-    case "touch":
-      if (args[0]) {
-        if (!currentDir[args[0]]) {
-          currentDir[args[0]] = ""; // Create an empty file
-          updateConsole(`File '${args[0]}' created.`, "success");
-        } else {
-          updateConsole(`File '${args[0]}' already exists.`, "error");
-        }
-      } else {
-        updateConsole("Please specify a file name.", "error");
+        updateConsole("Not a directory", "error");
       }
       break;
     case "help":
-      updateConsole("Commands: ls, cd [dir], cat [file], mkdir [dir], touch [file], help", "message");
+      updateConsole("Commands: ls, cd [dir], cat [file], tree, help", "message");
       break;
     case "clear":
       consoleElement.innerHTML = "";
