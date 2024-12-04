@@ -47,27 +47,20 @@ function stopLoading() {
 }
 
 // Function to generate the directory tree recursively
-function generateTree(dir, depth = 0, isLast = false) {
+function generateTree(dir, depth = 0, prefix = "") {
   let tree = "";
   const keys = Object.keys(dir);
-  const lastKeyIndex = keys.length - 1;
+  const lastIndex = keys.length - 1;
 
   keys.forEach((key, index) => {
-    // Игнорируем ключи "id" и "content"
-    if (key === "id" || key === "content") {
-      return;
-    }
+    if (key === "id" || key === "content") return;
 
-    const isLastItem = index === lastKeyIndex;
-    const prefix = isLastItem ? "└── " : "├── ";
-    const connector = isLastItem ? "    " : "│   ";
+    const isLast = index === lastIndex;
 
-    // Добавляем текущий элемент (директорию или файл)
-    tree += "    ".repeat(depth) + prefix + key + "\n";
+    tree += prefix + (isLast ? "└── " : "├── ") + key + "\n";
 
-    // Если это папка, рекурсивно добавляем содержимое
     if (typeof dir[key] === "object") {
-      tree += generateTree(dir[key], depth + 1, isLastItem);
+      tree += generateTree(dir[key], depth + 1, prefix + (isLast ? "    " : "│   "));
     }
   });
 
