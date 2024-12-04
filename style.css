@@ -1,0 +1,46 @@
+body {
+    background-color: black;
+    color: white;
+    font-family: monospace;
+    margin: 10px;
+    /*padding: 10px;*/
+}
+
+#console {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.input-line {
+    display: flex;
+}
+
+#prompt {
+    color: cyan;
+}
+
+.command-input {
+    flex: 1;
+    border: none;
+    background: none;
+    color: white;
+    outline: none;
+    font-family: monospace;
+}
+
+.message {
+    color: white;
+}
+
+.error {
+    color: red;
+}
+
+.success {
+    color: lime;
+}
+
+.content {
+    color: yellow;
+}
