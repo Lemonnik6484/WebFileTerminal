@@ -3,7 +3,7 @@ let currentDir = {};
 let path = [];
 let commandHistory = [];
 let historyIndex = -1;
-let currentPathStr = "root/";
+let currentPathStr = "root";
 
 const SCRIPT_ID = "AKfycbyww_GAzZNa12LS4OwgdDetBp_yseO8ILPWa830mq5hmKeHDVAsz24EgdoEoadamq1z";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
@@ -154,8 +154,11 @@ function parseCommand(command) {
         updateConsole("Usage: touch [filename]", "error");
       }
       break;
+    case "pwd":
+      updateConsole(`/${currentPathStr}`, "content");
+      break;
     case "help":
-      updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], help", "content");
+      updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], pwd, help", "content");
       break;
     case "clear":
       consoleElement.innerHTML = "";
