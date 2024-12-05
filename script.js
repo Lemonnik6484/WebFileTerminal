@@ -1,11 +1,11 @@
 let fileSystem = {};
 let currentDir = {};
 let path = [];
-let commandHistory = [];  // Store the history of commands
-let historyIndex = -1;    // Track the current index in the history
+let commandHistory = [];
+let historyIndex = -1;
 let currentPathStr = "root/";
 
-const SCRIPT_ID = "AKfycbySXRl7MJL4aYfaEX5rd9Y-c6FSAl3dsEtJ22mkhrRLj5-Im7VRFIdkDHGWi2aMSVWMAQ";
+const SCRIPT_ID = "AKfycbyww_GAzZNa12LS4OwgdDetBp_yseO8ILPWa830mq5hmKeHDVAsz24EgdoEoadamq1z";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
 
 const consoleElement = document.getElementById("console");
@@ -14,7 +14,7 @@ const prompt = document.getElementById("prompt");
 
 prompt.innerHTML = `${currentPathStr}$ `;
 
-let loadingAnimationInterval = null; // Store the interval for loading animation
+let loadingAnimationInterval = null;
 
 // Update console with new output
 function updateConsole(output, type) {
@@ -49,12 +49,10 @@ function stopLoading() {
 // Function to generate the directory tree recursively
 function generateTree(dir, depth = 0, prefix = "") {
   let tree = "";
-  const keys = Object.keys(dir);
+  const keys = Object.keys(dir).filter(key => key !== 'id' && key !== 'content'); // Exclude 'id' and 'content'
   const lastIndex = keys.length - 1;
 
   keys.forEach((key, index) => {
-    if (key === "id" || key === "content") return;
-
     const isLast = index === lastIndex;
 
     tree += prefix + (isLast ? "└── " : "├── ") + key + "\n";
@@ -67,27 +65,27 @@ function generateTree(dir, depth = 0, prefix = "") {
   return tree;
 }
 
-// Parse user commands
 function parseCommand(command) {
   const [cmd, ...args] = command.split(" ");
   switch (cmd) {
     case "ls":
-      if (typeof currentDir === 'object') {
-        updateConsole(Object.keys(currentDir).join(" "), "content");
+      if (typeof currentDir === 'object' && currentDir) {
+        const filteredKeys = Object.keys(currentDir).filter(key => key !== "id");
+        updateConsole(filteredKeys.join(" "), "content");
       } else {
         updateConsole("Not a directory", "error");
       }
       break;
     case "cd":
-      if (args[0] && currentDir[args[0]]) {
+      if (args[0] && currentDir && currentDir[args[0]]) {
         path.push(args[0]);
-        currentDir = currentDir[args[0]];
+        currentDir = currentDir[args[0]]; // Access the content of the directory
         currentPathStr = path.join("/");
         prompt.innerText = `${currentPathStr}$ `;
       } else if (args[0] === "..") {
         if (path.length > 1) {
           path.pop();
-          currentDir = path.reduce((acc, dir) => acc[dir], fileSystem);
+          currentDir = path.reduce((acc, dir) => acc[dir], fileSystem); // Ensure accessing content
           currentPathStr = path.join("/");
           prompt.innerText = `${currentPathStr}$ `;
         }
@@ -96,13 +94,13 @@ function parseCommand(command) {
       }
       break;
     case "cat":
-      if (args[0] && currentDir[args[0]] && typeof currentDir[args[0]]["id"] && currentDir[args[0]]["content"] === "") {
+      if (args[0] && currentDir[args[0]] && typeof currentDir[args[0]]["id"] && currentDir[args[0]] === "") {
         startLoading();
         fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]]["id"]}`, {})
             .then(response => response.json())
             .then(data => {
-              currentDir[args[0]]["content"] = data["content"];
-              updateConsole(currentDir[args[0]]["content"], "content");
+              currentDir[args[0]] = data["content"];
+              updateConsole(currentDir[args[0]], "content");
               stopLoading();
             })
             .catch(error => {
@@ -110,22 +108,54 @@ function parseCommand(command) {
               console.error(error);
               stopLoading();
             });
-      } else if (args[0] && currentDir[args[0]]["content"]) {
-        updateConsole(currentDir[args[0]]["content"], "content");
+      } else if (args[0] && currentDir[args[0]]) {
+        updateConsole(currentDir[args[0]], "content");
       } else {
         updateConsole("File not found", "error");
       }
       break;
     case "tree":
-      if (typeof currentDir === 'object') {
-        const tree = generateTree(currentDir);
+      if (typeof currentDir === 'object' && currentDir) {
+        const tree = generateTree(currentDir); // Ensure you're generating the tree based on content
         updateConsole(tree, "content");
       } else {
         updateConsole("Not a directory", "error");
       }
       break;
+    case "touch":
+      if (args[0]) {
+        startLoading();
+        const folderId = currentDir["id"];
+        fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=createFile`, {
+          redirect: "follow",
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            folderId: folderId,
+            fileName: args[0]
+          })
+        })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                currentDir[args[0]] = { id: data["fileId"], content: "" }; // Add file under content
+                updateConsole(`File '${args[0]}' created successfully`, "success");
+              } else {
+                updateConsole(`Error creating file: ${data.message}`, "error");
+              }
+              stopLoading();
+            })
+            .catch(error => {
+              updateConsole("Error creating file", "error");
+              console.error(error);
+              stopLoading();
+            });
+      } else {
+        updateConsole("Usage: touch [filename]", "error");
+      }
+      break;
     case "help":
-      updateConsole("Commands: ls, cd [dir], cat [file], tree, help", "content");
+      updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], help", "content");
       break;
     case "clear":
       consoleElement.innerHTML = "";
@@ -145,10 +175,11 @@ function loadFileSystem() {
         currentDir = fileSystem["root"]; // Начинаем с "root"
         path = ["root"]; // Устанавливаем начальный путь
         updateConsole("File system loaded!", "success");
+        console.log(fileSystem);
         stopLoading();
       })
       .catch(error => {
-        updateConsole("Error loading file system: " + error, "error")
+        updateConsole("Error loading file system: " + error, "error");
         stopLoading();
       });
 }
