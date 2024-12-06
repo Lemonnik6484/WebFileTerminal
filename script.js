@@ -230,6 +230,7 @@ commandInput.addEventListener("keydown", (e) => {
         updateConsole(`${path.at(-1)}# ${command}`, "message");
         parseCommand(command.slice(5), true);
       } else {
+        updateConsole(`${path.at(-1)}$ ${command}`, "message");
         parseCommand(command, false);
       }
 
