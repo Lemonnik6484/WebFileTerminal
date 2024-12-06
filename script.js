@@ -65,7 +65,7 @@ function generateTree(dir, depth = 0, prefix = "") {
   return tree;
 }
 
-function parseCommand(command) {
+function parseCommand(command, sudo) {
   const [cmd, ...args] = command.split(" ");
   switch (cmd) {
     case "ls":
@@ -225,9 +225,16 @@ commandInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     const command = commandInput.value;
     if (command.trim()) {
-      updateConsole(`${path.at(-1)}$ ${command}`, "message");
-      prompt.innerText = `${path.at(-1)}$ `;
-      parseCommand(command);
+
+      if (command.startsWith("sudo")) {
+        updateConsole(`${path.at(-1)}# ${command}`, "message");
+        parseCommand(command.slice(5), true);
+      } else {
+        parseCommand(command, false);
+      }
+
+      prompt.innerText = `${path.at(-1)}$ `;
+
       commandHistory.push(command); // Store the command in history
       historyIndex = commandHistory.length; // Reset the history index
     }
