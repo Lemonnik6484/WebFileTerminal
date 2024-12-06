@@ -1,18 +1,18 @@
 let fileSystem = {};
 let currentDir = {};
-let path = [];
+let path = [""];
 let commandHistory = [];
 let historyIndex = -1;
 let currentPathStr = "root";
 
-const SCRIPT_ID = "AKfycbyww_GAzZNa12LS4OwgdDetBp_yseO8ILPWa830mq5hmKeHDVAsz24EgdoEoadamq1z";
+const SCRIPT_ID = "AKfycbzwU0PzHcHPYQWTEvzmowOxJ4NGdv3KMhfPH6dnpr4ihkzeudx9Xllw3x-euoXscn55";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
 
 const consoleElement = document.getElementById("console");
 const commandInput = document.getElementById("command-input");
 const prompt = document.getElementById("prompt");
 
-prompt.innerHTML = `${currentPathStr}$ `;
+prompt.innerHTML = `${path.at(-1)}$ `;
 
 let loadingAnimationInterval = null;
 
@@ -34,7 +34,7 @@ function startLoading() {
   let i = 0;
   const animations = ["|", "/", "-", "\\"];
   loadingAnimationInterval = setInterval(() => {
-    prompt.innerHTML = `${currentPathStr}$ ${animations[i]}`;
+    prompt.innerHTML = `${path.at(-1)}$ ${animations[i]}`;
     i = (i + 1) % animations.length;
   }, 250);
 }
@@ -42,7 +42,7 @@ function startLoading() {
 // Function to stop loading animation
 function stopLoading() {
   clearInterval(loadingAnimationInterval);
-  prompt.innerHTML = `${currentPathStr}$ `;
+  prompt.innerHTML = `${path.at(-1)}$ `;
   commandInput.disabled = false;
 }
 
@@ -81,13 +81,13 @@ function parseCommand(command) {
         path.push(args[0]);
         currentDir = currentDir[args[0]]; // Access the content of the directory
         currentPathStr = path.join("/");
-        prompt.innerText = `${currentPathStr}$ `;
+        prompt.innerText = `${path.at(-1)}$ `;
       } else if (args[0] === "..") {
         if (path.length > 1) {
           path.pop();
           currentDir = path.reduce((acc, dir) => acc[dir], fileSystem); // Ensure accessing content
           currentPathStr = path.join("/");
-          prompt.innerText = `${currentPathStr}$ `;
+          prompt.innerText = `${path.at(-1)}$ `;
         }
       } else {
         updateConsole("Directory not found", "error");
@@ -126,7 +126,7 @@ function parseCommand(command) {
       if (args[0]) {
         startLoading();
         const folderId = currentDir["id"];
-        fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=createFile`, {
+        fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=touch`, {
           redirect: "follow",
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -154,11 +154,44 @@ function parseCommand(command) {
         updateConsole("Usage: touch [filename]", "error");
       }
       break;
+    case "mkdir":
+      if (args[0]) {
+        startLoading();
+        const folderId = currentDir["id"];
+        fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=mkdir`, {
+          redirect: "follow",
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            folderId: folderId,
+            folderName: args[0]
+          })
+        })
+            .then(response => response.json())
+            .then(data => {
+              console.log(data);
+              if (data.success) {
+                currentDir[args[0]] = { "id": data["folderId"] };
+                updateConsole(`Folder '${args[0]}' created successfully`, "success");
+              } else {
+                updateConsole(`Error creating folder: ${data.message}`, "error");
+              }
+              stopLoading();
+            })
+            .catch(error => {
+              updateConsole("Error creating folder", "error");
+              console.error(error);
+              stopLoading();
+            });
+      } else {
+        updateConsole("Usage: mkdir [folderName]", "error");
+      }
+      break;
     case "pwd":
       updateConsole(`/${currentPathStr}`, "content");
       break;
     case "help":
-      updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], pwd, help", "content");
+      updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], mkdir [folder], pwd, help", "content");
       break;
     case "clear":
       consoleElement.innerHTML = "";
@@ -175,8 +208,8 @@ function loadFileSystem() {
       .then(response => response.json())
       .then(data => {
         fileSystem = data; // Сохраняем всю структуру
-        currentDir = fileSystem["root"]; // Начинаем с "root"
-        path = ["root"]; // Устанавливаем начальный путь
+        currentDir = fileSystem["root"]["users"]["guest"]; // Начинаем с "root"
+        path = ["root", "users", "guest"]; // Устанавливаем начальный путь
         updateConsole("File system loaded!", "success");
         console.log(fileSystem);
         stopLoading();
@@ -192,9 +225,8 @@ commandInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     const command = commandInput.value;
     if (command.trim()) {
-      updateConsole(`${currentPathStr}$ ${command}`, "message");
-      console.log(currentPathStr);
-      prompt.innerText = `${currentPathStr}$ `;
+      updateConsole(`${path.at(-1)}$ ${command}`, "message");
+      prompt.innerText = `${path.at(-1)}$ `;
       parseCommand(command);
       commandHistory.push(command); // Store the command in history
       historyIndex = commandHistory.length; // Reset the history index
