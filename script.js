@@ -190,6 +190,16 @@ function parseCommand(command, sudo) {
     case "pwd":
       updateConsole(`/${currentPathStr}`, "content");
       break;
+    case "history":
+      if (commandHistory.length === 0) {
+        updateConsole("No commands in history", "content");
+      } else {
+        const historyOutput = commandHistory
+            .map((cmd, index) => `${index + 1}: ${cmd}`)
+            .join("\n");
+        updateConsole(historyOutput, "content");
+      }
+      break;
     case "help":
       updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], mkdir [folder], pwd, help", "content");
       break;
