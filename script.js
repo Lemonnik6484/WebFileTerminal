@@ -5,7 +5,7 @@ let commandHistory = [];
 let historyIndex = -1;
 let currentPathStr = "root";
 
-const SCRIPT_ID = "AKfycbzwU0PzHcHPYQWTEvzmowOxJ4NGdv3KMhfPH6dnpr4ihkzeudx9Xllw3x-euoXscn55";
+const SCRIPT_ID = "AKfycbwFttefUVi9IV52HqyVbmfMJLFMLAXRStYu4oQe5xojoLm5ELTqeVokEh6V_mIKovI5";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
 
 const consoleElement = document.getElementById("console");
@@ -63,6 +63,107 @@ function generateTree(dir, depth = 0, prefix = "") {
   });
 
   return tree;
+}
+
+function openEditor(filename, content, isEditable) {
+  // Create editor overlay
+  const editorOverlay = document.createElement("div");
+  editorOverlay.classList.add("editor-overlay");
+
+  const editorContainer = document.createElement("div");
+  editorContainer.classList.add("editor-container");
+
+  // Title bar at the top
+  const titleBar = document.createElement("div");
+  titleBar.classList.add("editor-title");
+  titleBar.innerText = `Editing: ${filename}`;
+
+  // Main content area
+  const editorContent = document.createElement("pre");
+  editorContent.classList.add("editor-content");
+  editorContent.contentEditable = isEditable; // Enable/disable editing
+  editorContent.spellcheck = false;
+  editorContent.innerText = content; // Set initial content
+
+  // Status bar at the bottom
+  const statusBar = document.createElement("div");
+  statusBar.classList.add("editor-status");
+  statusBar.innerText = isEditable
+      ? "Ctrl+O: Save | Ctrl+X: Exit | Edited"
+      : "Ctrl+X: Exit | Read-Only";
+
+  // Append all elements
+  editorContainer.appendChild(titleBar);
+  editorContainer.appendChild(editorContent);
+  editorContainer.appendChild(statusBar);
+  editorOverlay.appendChild(editorContainer);
+  document.body.appendChild(editorOverlay);
+
+  // Focus on content for immediate typing
+  editorContent.focus();
+
+  // Event handlers
+  let unsavedChanges = false;
+
+  // Detect content changes
+  if (isEditable) {
+    editorContent.addEventListener("input", () => {
+      unsavedChanges = true;
+      statusBar.innerText = "Ctrl+O: Save | Ctrl+X: Exit | Edited";
+    });
+  }
+
+  const closeEditor = () => {
+    document.body.removeChild(editorOverlay);
+  };
+
+  const saveFile = () => {
+    if (isEditable && unsavedChanges) {
+      startLoading();
+      fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=saveContent`, {
+        redirect: "follow",
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          fileId: currentDir[filename].id,
+          content: editorContent.innerText
+        })
+      })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              currentDir[filename].content = editorContent.innerText; // Update local content
+              statusBar.innerText = "File saved successfully! Ctrl+X: Exit";
+              unsavedChanges = false;
+            } else {
+              statusBar.innerText = `Error saving file: ${data.message}`;
+            }
+            stopLoading();
+          })
+          .catch(error => {
+            console.error(error);
+            statusBar.innerText = "Error saving file. See console for details.";
+            stopLoading();
+          });
+    }
+  };
+
+  // Keyboard shortcuts
+  editorOverlay.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.key === "x") { // Exit
+      if (unsavedChanges) {
+        if (confirm("You have unsaved changes. Exit without saving?")) {
+          closeEditor();
+        }
+      } else {
+        closeEditor();
+      }
+      e.preventDefault();
+    } else if (e.ctrlKey && e.key === "o") { // Save
+      saveFile();
+      e.preventDefault();
+    }
+  });
 }
 
 function parseCommand(command, sudo) {
@@ -185,6 +286,43 @@ function parseCommand(command, sudo) {
             });
       } else {
         updateConsole("Usage: mkdir [folderName]", "error");
+      }
+      break;
+    case "nano":
+      if (args[0]) {
+        if (currentDir[args[0]] && typeof currentDir[args[0]] === "object" && "id" in currentDir[args[0]]) {
+          // Fetch file content if not already loaded
+          if (!currentDir[args[0]].content) {
+            startLoading();
+            fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]].id}`)
+                .then(response => response.json())
+                .then(data => {
+                  currentDir[args[0]].content = data.content;
+                  stopLoading();
+
+                  if (sudo) {
+                    openEditor(args[0], currentDir[args[0]].content, true);
+                  } else {
+                    openEditor(args[0], currentDir[args[0]].content, false);
+                  }
+                })
+                .catch(error => {
+                  updateConsole("Error loading file content", "error");
+                  console.error(error);
+                  stopLoading();
+                });
+          } else {
+            if (sudo) {
+              openEditor(args[0], currentDir[args[0]].content, true);
+            } else {
+              openEditor(args[0], currentDir[args[0]].content, false);
+            }
+          }
+        } else {
+          updateConsole("File not found", "error");
+        }
+      } else {
+        updateConsole("Usage: nano [filename]", "error");
       }
       break;
     case "pwd":
