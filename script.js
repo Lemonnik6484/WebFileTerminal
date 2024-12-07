@@ -264,6 +264,33 @@ commandInput.addEventListener("keydown", (e) => {
     } else {
       commandInput.value = ""; // Clear input field if at the end of history
     }
+  } else if (e.key === "Tab") {
+    e.preventDefault(); // Предотвращаем стандартное поведение Tab
+
+    const commandParts = commandInput.value.split(" ");
+    const partial = commandParts.at(-1);
+    const suggestions = [];
+
+    // Поиск совпадений для команд
+    if (commandParts.length === 1) {
+      const commands = ["ls", "cd", "cat", "tree", "touch", "mkdir", "pwd", "history", "clear", "help", "nano"];
+      suggestions.push(...commands.filter(cmd => cmd.startsWith(partial)));
+    }
+
+    // Поиск совпадений для файлов/папок
+    if (currentDir && typeof currentDir === "object") {
+      const dirKeys = Object.keys(currentDir).filter(key => key !== "id");
+      suggestions.push(...dirKeys.filter(key => key.startsWith(partial)));
+    }
+
+    if (suggestions.length === 1) {
+      // Если совпадение одно, подставляем его
+      commandParts[commandParts.length - 1] = suggestions[0];
+      commandInput.value = commandParts.join(" ");
+    } else if (suggestions.length > 1) {
+      // Если совпадений несколько, показываем варианты
+      updateConsole(suggestions.join(" "), "content");
+    }
   }
 });
 
