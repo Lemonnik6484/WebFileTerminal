@@ -340,6 +340,9 @@ function parseCommand(command, sudo) {
     case "help":
       updateConsole("Commands: ls, cd [dir], cat [file], tree, touch [file], mkdir [folder], pwd, help", "content");
       break;
+    case "hlep":
+      updateConsole("comasnd: l;s, vcd ]ddoir[, car [fdo;e[, tfdd, thodc ]fiel], mkdie \\duie[, pog, hlep", "content");
+      break;
     case "clear":
       consoleElement.innerHTML = "";
       break;
