@@ -5,7 +5,7 @@ let commandHistory = [];
 let historyIndex = -1;
 let currentPathStr = "root";
 
-const SCRIPT_ID = "AKfycbwFttefUVi9IV52HqyVbmfMJLFMLAXRStYu4oQe5xojoLm5ELTqeVokEh6V_mIKovI5";
+const SCRIPT_ID = "AKfycbx_L6zjJtJ9CVu18JouU-55NjOlslMonHqSoaUs9zmST2ovDSsIsLN4srEjTIE-dQqG";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
 
 const consoleElement = document.getElementById("console");
@@ -120,7 +120,7 @@ function openEditor(filename, content, isEditable) {
   const saveFile = () => {
     if (isEditable && unsavedChanges) {
       startLoading();
-      fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=saveContent`, {
+      fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=setContent`, {
         redirect: "follow",
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -132,17 +132,17 @@ function openEditor(filename, content, isEditable) {
           .then(response => response.json())
           .then(data => {
             if (data.success) {
-              currentDir[filename].content = editorContent.innerText; // Update local content
+              currentDir[filename].content = editorContent.innerText;
               statusBar.innerText = "File saved successfully! Ctrl+X: Exit";
               unsavedChanges = false;
             } else {
-              statusBar.innerText = `Error saving file: ${data.message}`;
+              statusBar.innerText = `Error saving file: ${data.message} Ctrl+X: Exit`;
             }
             stopLoading();
           })
           .catch(error => {
             console.error(error);
-            statusBar.innerText = "Error saving file. See console for details.";
+            statusBar.innerText = "Error saving file. See console for details. Ctrl+X: Exit";
             stopLoading();
           });
     }
@@ -201,7 +201,7 @@ function parseCommand(command, sudo) {
             .then(response => response.json())
             .then(data => {
               currentDir[args[0]] = data["content"];
-              updateConsole(currentDir[args[0]], "content");
+              updateConsole(currentDir[args[0]]["content"], "content");
               stopLoading();
             })
             .catch(error => {
@@ -210,14 +210,14 @@ function parseCommand(command, sudo) {
               stopLoading();
             });
       } else if (args[0] && currentDir[args[0]]) {
-        updateConsole(currentDir[args[0]], "content");
+        updateConsole(currentDir[args[0]]["content"], "content");
       } else {
         updateConsole("File not found", "error");
       }
       break;
     case "tree":
       if (typeof currentDir === 'object' && currentDir) {
-        const tree = generateTree(currentDir); // Ensure you're generating the tree based on content
+        const tree = generateTree(currentDir);
         updateConsole(tree, "content");
       } else {
         updateConsole("Not a directory", "error");
@@ -239,7 +239,7 @@ function parseCommand(command, sudo) {
             .then(response => response.json())
             .then(data => {
               if (data.success) {
-                currentDir[args[0]] = { id: data["fileId"], content: "" }; // Add file under content
+                currentDir[args[0]] = { id: data["fileId"], content: "" };
                 updateConsole(`File '${args[0]}' created successfully`, "success");
               } else {
                 updateConsole(`Error creating file: ${data.message}`, "error");
@@ -291,7 +291,6 @@ function parseCommand(command, sudo) {
     case "nano":
       if (args[0]) {
         if (currentDir[args[0]] && typeof currentDir[args[0]] === "object" && "id" in currentDir[args[0]]) {
-          // Fetch file content if not already loaded
           if (!currentDir[args[0]].content) {
             startLoading();
             fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]].id}`)
@@ -351,21 +350,36 @@ function parseCommand(command, sudo) {
 
 // Load the file system from JSON
 function loadFileSystem() {
-  startLoading();
-  fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getStructure&folderId=${FOLDER_ID}`)
+  function loadFiles() {
+    fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getStructure&folderId=${FOLDER_ID}`)
+        .then(response => response.json())
+        .then(data => {
+          fileSystem = data;
+          currentDir = fileSystem["root"]["users"]["guest"];
+          path = ["root", "users", "guest"];
+          updateConsole("File system loaded!", "success");
+          console.log(fileSystem);
+          stopLoading();
+        })
+        .catch(error => {
+          updateConsole("Error loading file system: " + error, "error");
+          stopLoading();
+        })
+        .finally(() => {
+          stopLoading();
+        });
+  }
+
+  startLoading()
+  fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getSpace`)
       .then(response => response.json())
       .then(data => {
-        fileSystem = data; // Сохраняем всю структуру
-        currentDir = fileSystem["root"]["users"]["guest"]; // Начинаем с "root"
-        path = ["root", "users", "guest"]; // Устанавливаем начальный путь
-        updateConsole("File system loaded!", "success");
-        console.log(fileSystem);
-        stopLoading();
+        updateConsole(`Drive space: ${data["used"]}/${data["total"]} (${data["free"]} free)`, "message");
+        loadFiles();
       })
       .catch(error => {
-        updateConsole("Error loading file system: " + error, "error");
-        stopLoading();
-      });
+        console.error(error);
+      })
 }
 
 // Handle keydown events for command input
@@ -382,7 +396,7 @@ commandInput.addEventListener("keydown", (e) => {
         parseCommand(command, false);
       }
 
-      prompt.innerText = `${path.at(-1)}$ `;
+      prompt.innerText = `${path.at(-1)}$ `;
 
       commandHistory.push(command); // Store the command in history
       historyIndex = commandHistory.length; // Reset the history index
