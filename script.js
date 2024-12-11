@@ -5,7 +5,7 @@ let commandHistory = [];
 let historyIndex = -1;
 let currentPathStr = "root";
 
-const SCRIPT_ID = "AKfycbx_L6zjJtJ9CVu18JouU-55NjOlslMonHqSoaUs9zmST2ovDSsIsLN4srEjTIE-dQqG";
+const SCRIPT_ID = "AKfycbwHVEgoKnZJXvi6I1uLZnvgkLdl4uhJrPPgwtg1gVqR8T_42DWrSDOQ79CuqWBjXgnA";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
 
 const consoleElement = document.getElementById("console");
@@ -167,11 +167,14 @@ function openEditor(filename, content, isEditable) {
 }
 
 function parseCommand(command, sudo) {
-  const [cmd, ...args] = command.split(" ");
+  const args = command.match(/"([^"]+)"|[^\s"]+/g).map(arg => arg.replace(/"/g, ""));
+  const cmd = args.shift();
   switch (cmd) {
     case "ls":
       if (typeof currentDir === 'object' && currentDir) {
-        const filteredKeys = Object.keys(currentDir).filter(key => key !== "id");
+        const filteredKeys = Object.keys(currentDir)
+            .filter(key => key !== "id")
+            .map(key => (key.includes(" ") ? `"${key}"` : key));
         updateConsole(filteredKeys.join(" "), "content");
       } else {
         updateConsole("Not a directory", "error");
@@ -322,6 +325,41 @@ function parseCommand(command, sudo) {
         }
       } else {
         updateConsole("Usage: nano [filename]", "error");
+      }
+      break;
+    case "rm":
+      if (args[0]) {
+        const fileName = args[0].replace(/"/g, "");
+        if (currentDir[fileName] && currentDir[fileName].id) {
+          startLoading();
+          fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=deleteFile`, {
+            redirect: "follow",
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              fileId: currentDir[fileName].id
+            })
+          })
+              .then(response => response.json())
+              .then(data => {
+                if (data.success) {
+                  delete currentDir[fileName];
+                  updateConsole(`File '${fileName}' deleted successfully`, "success");
+                } else {
+                  updateConsole(`Error deleting file: ${data.message}`, "error");
+                }
+                stopLoading();
+              })
+              .catch(error => {
+                updateConsole("Error deleting file", "error");
+                console.error(error);
+                stopLoading();
+              });
+        } else {
+          updateConsole(`File '${fileName}' not found`, "error");
+        }
+      } else {
+        updateConsole("Usage: rm [filename]", "error");
       }
       break;
     case "pwd":
