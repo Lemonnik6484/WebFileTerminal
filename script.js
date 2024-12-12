@@ -5,7 +5,7 @@ let commandHistory = [];
 let historyIndex = -1;
 let currentPathStr = "root";
 
-const SCRIPT_ID = "AKfycbwHVEgoKnZJXvi6I1uLZnvgkLdl4uhJrPPgwtg1gVqR8T_42DWrSDOQ79CuqWBjXgnA";
+const SCRIPT_ID = "AKfycbytf8NsFxgMJw_b1xVDYBM4x47YMshSKY-daWt4UxviGheLSKZZ4aI9UE8lNdjkQEXw";
 const FOLDER_ID = "138LS_NKFaTZIlDcujQbNJEo_X_b4z77y";
 
 const consoleElement = document.getElementById("console");
@@ -49,7 +49,7 @@ function stopLoading() {
 // Function to generate the directory tree recursively
 function generateTree(dir, depth = 0, prefix = "") {
   let tree = "";
-  const keys = Object.keys(dir).filter(key => key !== 'id' && key !== 'content'); // Exclude 'id' and 'content'
+  const keys = Object.keys(dir).filter(key => key !== 'metadata' && key !== 'content'); // Exclude 'metadata' and 'content'
   const lastIndex = keys.length - 1;
 
   keys.forEach((key, index) => {
@@ -173,7 +173,7 @@ function parseCommand(command, sudo) {
     case "ls":
       if (typeof currentDir === 'object' && currentDir) {
         const filteredKeys = Object.keys(currentDir)
-            .filter(key => key !== "id")
+            .filter(key => key !== "metadata")
             .map(key => (key.includes(" ") ? `"${key}"` : key));
         updateConsole(filteredKeys.join(" "), "content");
       } else {
@@ -198,12 +198,19 @@ function parseCommand(command, sudo) {
       }
       break;
     case "cat":
-      if (args[0] && currentDir[args[0]] && typeof currentDir[args[0]]["id"] && currentDir[args[0]] === "") {
+      console.log(currentDir);
+
+      if (!args[0]){
+        updateConsole("Usage: cat [file]", "error");
+        break;
+      }
+
+      if (currentDir[args[0]] && !currentDir[args[0]]["content"]) {
         startLoading();
-        fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]]["id"]}`, {})
+        fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]]["metadata"]["id"]}`, {})
             .then(response => response.json())
             .then(data => {
-              currentDir[args[0]] = data["content"];
+              currentDir[args[0]]["content"] = data["content"];
               updateConsole(currentDir[args[0]]["content"], "content");
               stopLoading();
             })
@@ -212,10 +219,10 @@ function parseCommand(command, sudo) {
               console.error(error);
               stopLoading();
             });
-      } else if (args[0] && currentDir[args[0]]) {
+      } else if (currentDir[args[0]]["content"]) {
         updateConsole(currentDir[args[0]]["content"], "content");
       } else {
-        updateConsole("File not found", "error");
+        updateConsole("File not found or corrupted", "error");
       }
       break;
     case "tree":
@@ -229,7 +236,8 @@ function parseCommand(command, sudo) {
     case "touch":
       if (args[0]) {
         startLoading();
-        const folderId = currentDir["id"];
+        const folderId = currentDir["metadata"]["id"];
+        const nowISO = new Date().toISOString();
         fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=touch`, {
           redirect: "follow",
           method: "POST",
@@ -242,7 +250,17 @@ function parseCommand(command, sudo) {
             .then(response => response.json())
             .then(data => {
               if (data.success) {
-                currentDir[args[0]] = { id: data["fileId"], content: "" };
+                currentDir[args[0]] = {
+                  "metadata" : {
+                    id: data["fileId"],
+                    "name": args[0],
+                    "type": "file",
+                    "mimeType": data["mimeType"],
+                    "dateCreated": nowISO,
+                    "dateModified": nowISO
+                  },
+                  content: ""
+                };
                 updateConsole(`File '${args[0]}' created successfully`, "success");
               } else {
                 updateConsole(`Error creating file: ${data.message}`, "error");
@@ -261,7 +279,8 @@ function parseCommand(command, sudo) {
     case "mkdir":
       if (args[0]) {
         startLoading();
-        const folderId = currentDir["id"];
+        const folderId = currentDir["metadata"]["id"];
+        const nowISO = new Date().toISOString();
         fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=mkdir`, {
           redirect: "follow",
           method: "POST",
@@ -275,7 +294,15 @@ function parseCommand(command, sudo) {
             .then(data => {
               console.log(data);
               if (data.success) {
-                currentDir[args[0]] = { "id": data["folderId"] };
+                currentDir[args[0]] = {
+                  "metadata": {
+                    "id": data["folderId"],
+                    "name": args[0],
+                    "type": "folder",
+                    "dateCreated": nowISO,
+                    "dateModified": nowISO
+                  }
+                };
                 updateConsole(`Folder '${args[0]}' created successfully`, "success");
               } else {
                 updateConsole(`Error creating folder: ${data.message}`, "error");
@@ -293,10 +320,10 @@ function parseCommand(command, sudo) {
       break;
     case "nano":
       if (args[0]) {
-        if (currentDir[args[0]] && typeof currentDir[args[0]] === "object" && "id" in currentDir[args[0]]) {
+        if (currentDir[args[0]] && typeof currentDir[args[0]] === "object" && "id" in currentDir[args[0]]["metadata"]) {
           if (!currentDir[args[0]].content) {
             startLoading();
-            fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]].id}`)
+            fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=getContent&fileId=${currentDir[args[0]]["metadata"].id}`)
                 .then(response => response.json())
                 .then(data => {
                   currentDir[args[0]].content = data.content;
@@ -330,14 +357,14 @@ function parseCommand(command, sudo) {
     case "rm":
       if (args[0]) {
         const fileName = args[0].replace(/"/g, "");
-        if (currentDir[fileName] && currentDir[fileName].id) {
+        if (currentDir[fileName] && currentDir[fileName]["metadata"].id) {
           startLoading();
           fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=deleteFile`, {
             redirect: "follow",
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
-              fileId: currentDir[fileName].id
+              fileId: currentDir[fileName]["metadata"].id
             })
           })
               .then(response => response.json())
@@ -360,6 +387,41 @@ function parseCommand(command, sudo) {
         }
       } else {
         updateConsole("Usage: rm [filename]", "error");
+      }
+      break;
+    case "rmdir":
+      if (args[0]) {
+        const folderName = args[0].replace(/"/g, "");
+        if (currentDir[folderName] && currentDir[folderName]["metadata"].id) {
+          startLoading();
+          fetch(`https://script.google.com/macros/s/${SCRIPT_ID}/exec?action=deleteFolder`, {
+            redirect: "follow",
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              fileId: currentDir[folderName]["metadata"].id
+            })
+          })
+              .then(response => response.json())
+              .then(data => {
+                if (data.success) {
+                  delete currentDir[folderName];
+                  updateConsole(`Folder '${folderName}' deleted successfully`, "success");
+                } else {
+                  updateConsole(`Error deleting folder: ${data.message}`, "error");
+                }
+                stopLoading();
+              })
+              .catch(error => {
+                updateConsole("Error deleting folder", "error");
+                console.error(error);
+                stopLoading();
+              });
+        } else {
+          updateConsole(`Folder '${folderName}' not found`, "error");
+        }
+      } else {
+        updateConsole("Usage: rmdir [folder]", "error");
       }
       break;
     case "pwd":
@@ -472,7 +534,7 @@ commandInput.addEventListener("keydown", (e) => {
 
     // Поиск совпадений для файлов/папок
     if (currentDir && typeof currentDir === "object") {
-      const dirKeys = Object.keys(currentDir).filter(key => key !== "id");
+      const dirKeys = Object.keys(currentDir).filter(key => key !== "metadata");
       suggestions.push(...dirKeys.filter(key => key.startsWith(partial)));
     }
 
